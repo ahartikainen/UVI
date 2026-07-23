@@ -1,5 +1,3 @@
-https://ahartikainen.github.io/UVI/
-
 # UV-ennuste
 
 Kevyt, staattinen UV-indeksiennuste GitHub Pagesia varten.
@@ -59,3 +57,20 @@ Osoitehaku tehdään vain käyttäjän painaessa Hae-painiketta. Sovellus rajoit
 - **Tänään**-valinta näyttää koko vuorokauden tuntidatan klo 00–23, myös jo kuluneet tunnit.
 
 Open-Meteon ennustevastaus alkaa oletuksena kuluvan päivän klo 00:sta, joten menneet tunnit voidaan näyttää saman päivän kuvaajassa. Nykyhetken arvo on lähimmän tuntipisteen arvio.
+
+
+## UV-arvojen tulkinta
+
+Sivu näyttää kaksi Open-Meteon arvoa erillään eikä laske niiden keskiarvoa:
+
+- **Sääennuste huomioitu** (`uv_index`) sisältää ennustetun pilvisyyden vaikutuksen. Tätä käytetään nykytilanteessa, päivän maksimissa ja aurinkosuojan suosituksessa.
+- **Pilvetön taivas** (`uv_index_clear_sky`) on vertailuarvo tilanteelle, jossa pilvet eivät vaimenna UV-säteilyä. Vaihtelevassa pilvisyydessä sitä voi käyttää varautumisen ylärajana.
+
+Kuvaaja ja taulukko käyttävät samaa `visibleRows()`-aineistoa valitulla aikavälillä. Tänään-valinta näyttää kaikki kuluvan päivän tunnit; muut valinnat näyttävät vastaavan määrän tulevia tunteja.
+
+## Mobiilikorjaukset
+
+- Karttakuvien yleinen `max-width`-ristiriita on estetty Leaflet-kartassa.
+- Kartat käyttävät pienempää korkeutta puhelimella ja niiden koko päivitetään selainikkunan muuttuessa.
+- Taulukko muuttuu puhelimella korteiksi, jotta vaakavieritystä ei tarvita.
+- Kuvaajan selite, akselit ja aikavälipainikkeet mukautuvat kapeaan näyttöön.

@@ -65,9 +65,14 @@
         <span id="coordinates" class="metric-detail">60,1699° N, 24,9384° E</span>
       </article>
       <article class="metric-card">
-        <span class="metric-label">Nykyhetken arvio</span>
+        <span class="metric-label">Nyt · sääennuste huomioitu</span>
         <strong id="currentUv" class="metric-value">–</strong>
         <span id="currentUvLevel" class="metric-detail">UV-indeksi</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">Nyt · pilvetön taivas</span>
+        <strong id="currentClearUv" class="metric-value">–</strong>
+        <span id="currentClearDetail" class="metric-detail">Vertailuarvo</span>
       </article>
       <article class="metric-card">
         <span class="metric-label">Tämän päivän maksimi</span>
@@ -77,8 +82,15 @@
       <article class="metric-card">
         <span class="metric-label">Selkeän taivaan maksimi</span>
         <strong id="clearSkyMax" class="metric-value">–</strong>
-        <span class="metric-detail">Vertailuarvo</span>
+        <span id="clearSkyMaxTime" class="metric-detail">Vertailuarvo</span>
       </article>
+    </section>
+
+    <section class="panel interpretation-panel" aria-labelledby="interpretationHeading">
+      <p class="eyebrow">Arvojen tulkinta</p>
+      <h2 id="interpretationHeading">Kumpaa UV-arvoa käytetään?</h2>
+      <p id="interpretationText" class="interpretation-text">Lasketaan arvojen välistä eroa…</p>
+      <p class="helper-text"><strong>Sääennuste huomioitu</strong> sisältää ennustetun pilvisyyden vaikutuksen ja on tavallinen käyttöarvo. <strong>Pilvetön taivas</strong> on vertailu mahdolliselle UV-tasolle ilman pilvien vaimentavaa vaikutusta. Arvoja ei keskiarvoteta.</p>
     </section>
 
     <section class="panel sun-protection-panel" aria-labelledby="sunProtectionHeading">
@@ -148,8 +160,8 @@
           <thead>
             <tr>
               <th>Aika</th>
-              <th>UV-indeksi</th>
-              <th>Selkeä taivas</th>
+              <th>Sääennuste huomioitu</th>
+              <th>Pilvetön taivas</th>
             </tr>
           </thead>
           <tbody id="forecastTableBody"></tbody>

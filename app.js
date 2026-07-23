@@ -15,6 +15,7 @@ const state = {
   overviewMarker: null,
   map: null,
   overviewMap: null,
+  mapResizeObserver: null,
   lastSearchAt: 0,
   searchCache: new Map()
 };
@@ -87,6 +88,27 @@ function formatDateTime(isoString, compact = false) {
   ).format(date);
 }
 
+const FINLAND_BOUNDS = L.latLngBounds([59.5, 19.0], [70.2, 32.0]);
+
+function refreshMapSizes({ refitOverview = false } = {}) {
+  if (state.map) {
+    state.map.invalidateSize({ pan: false, animate: false });
+  }
+
+  if (state.overviewMap) {
+    state.overviewMap.invalidateSize({ pan: false, animate: false });
+    if (refitOverview) {
+      state.overviewMap.fitBounds(FINLAND_BOUNDS, { padding: [8, 8], animate: false });
+    }
+  }
+}
+
+function scheduleMapRefresh(refitOverview = false) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => refreshMapSizes({ refitOverview }));
+  });
+}
+
 function initMaps() {
   state.map = L.map('map', { zoomControl: true }).setView([state.latitude, state.longitude], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -111,7 +133,7 @@ function initMaps() {
     boxZoom: false,
     keyboard: false,
     tap: false
-  }).fitBounds([[59.5, 19.0], [70.2, 32.0]], { padding: [8, 8] });
+  });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 8 }).addTo(state.overviewMap);
   state.overviewMarker = L.circleMarker([state.latitude, state.longitude], {
     radius: 7,
@@ -121,10 +143,16 @@ function initMaps() {
     fillOpacity: 1
   }).addTo(state.overviewMap);
 
-  window.addEventListener('resize', () => {
-    state.map.invalidateSize(false);
-    state.overviewMap.invalidateSize(false);
-  });
+  scheduleMapRefresh(true);
+  window.addEventListener('load', () => scheduleMapRefresh(true), { once: true });
+  window.addEventListener('resize', () => scheduleMapRefresh(true));
+  window.addEventListener('orientationchange', () => scheduleMapRefresh(true));
+
+  if ('ResizeObserver' in window) {
+    state.mapResizeObserver = new ResizeObserver(() => scheduleMapRefresh(true));
+    state.mapResizeObserver.observe(document.querySelector('#map'));
+    state.mapResizeObserver.observe(document.querySelector('#finlandMap'));
+  }
 }
 
 async function fetchForecast(latitude, longitude) {
@@ -164,10 +192,7 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
   try {
     state.forecast = await fetchForecast(latitude, longitude);
     renderAll();
-    setTimeout(() => {
-      state.map.invalidateSize(false);
-      state.overviewMap.invalidateSize(false);
-    }, 100);
+    scheduleMapRefresh(true);
     setStatus('Ennuste päivitetty', 'ready');
   } catch (error) {
     setStatus('Haku epäonnistui', 'error');

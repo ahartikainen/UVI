@@ -1,3 +1,5 @@
+https://ahartikainen.github.io/UVI/
+
 # UV-ennuste
 
 Kevyt, staattinen UV-indeksiennuste GitHub Pagesia varten.

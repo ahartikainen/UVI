@@ -45,8 +45,10 @@ const elements = {
   sunProtectionBadge: document.querySelector('#sunProtectionBadge'),
   sunProtectionNow: document.querySelector('#sunProtectionNow'),
   sunProtectionMessage: document.querySelector('#sunProtectionMessage'),
-  sunProtectionStart: document.querySelector('#sunProtectionStart'),
-  sunProtectionEnd: document.querySelector('#sunProtectionEnd'),
+  actualProtectionStart: document.querySelector('#actualProtectionStart'),
+  actualProtectionEnd: document.querySelector('#actualProtectionEnd'),
+  clearProtectionStart: document.querySelector('#clearProtectionStart'),
+  clearProtectionEnd: document.querySelector('#clearProtectionEnd'),
   rangeButtons: [...document.querySelectorAll('.range-button')]
 };
 
@@ -91,7 +93,13 @@ function initMaps() {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap-tekijät'
   }).addTo(state.map);
-  state.marker = L.marker([state.latitude, state.longitude]).addTo(state.map);
+  state.marker = L.circleMarker([state.latitude, state.longitude], {
+    radius: 9,
+    weight: 3,
+    color: '#17555c',
+    fillColor: '#ffffff',
+    fillOpacity: 1
+  }).addTo(state.map).bindTooltip('Valittu sijainti');
   state.map.on('click', ({ latlng }) => chooseLocation(latlng.lat, latlng.lng, 'Kartalta valittu sijainti', false));
 
   state.overviewMap = L.map('finlandMap', {
@@ -141,8 +149,8 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
   state.latitude = latitude;
   state.longitude = longitude;
   state.locationName = name;
-  state.marker.setLatLng([latitude, longitude]);
-  state.overviewMarker.setLatLng([latitude, longitude]);
+  state.marker.setLatLng([latitude, longitude]).bindTooltip(`Valittu sijainti: ${name}`);
+  state.overviewMarker.setLatLng([latitude, longitude]).bindTooltip(`Valittu sijainti: ${name}`);
   if (centerMap) state.map.setView([latitude, longitude], 13);
 
   const coordinateText = `${formatCoordinate(latitude, 'N', 'S')}, ${formatCoordinate(longitude, 'E', 'W')}`;
@@ -228,38 +236,76 @@ function renderSummary() {
   }
 }
 
+function interpolateThresholdTime(first, second, key) {
+  const value1 = first[key];
+  const value2 = second[key];
+  if (!Number.isFinite(value1) || !Number.isFinite(value2) || value1 === value2) return null;
+  const fraction = (PROTECTION_LIMIT - value1) / (value2 - value1);
+  if (fraction < 0 || fraction > 1) return null;
+  const time1 = new Date(first.timestamp).getTime();
+  const time2 = new Date(second.timestamp).getTime();
+  const interpolated = time1 + fraction * (time2 - time1);
+  return new Date(Math.round(interpolated / 60000) * 60000);
+}
+
+function protectionPeriod(rows, key) {
+  if (!rows.length || !rows.some((row) => row[key] >= PROTECTION_LIMIT)) return null;
+
+  let start = null;
+  let end = null;
+  for (let index = 0; index < rows.length - 1; index += 1) {
+    const first = rows[index];
+    const second = rows[index + 1];
+    if (first[key] < PROTECTION_LIMIT && second[key] >= PROTECTION_LIMIT && !start) {
+      start = interpolateThresholdTime(first, second, key);
+    }
+    if (first[key] >= PROTECTION_LIMIT && second[key] < PROTECTION_LIMIT) {
+      end = interpolateThresholdTime(first, second, key);
+    }
+  }
+
+  const firstAbove = rows.find((row) => row[key] >= PROTECTION_LIMIT);
+  const lastAbove = [...rows].reverse().find((row) => row[key] >= PROTECTION_LIMIT);
+  return {
+    start: start || new Date(firstAbove.timestamp),
+    end: end || new Date(lastAbove.timestamp)
+  };
+}
+
+function formatClock(value) {
+  return value ? new Intl.DateTimeFormat('fi-FI', { hour: '2-digit', minute: '2-digit' }).format(value) : 'Ei tänään';
+}
+
 function renderProtection() {
   const rows = todayRows();
   const current = nearestCurrentRow();
-  const protectedRows = rows.filter((row) => row.uv >= PROTECTION_LIMIT);
-  const start = protectedRows[0];
-  const end = protectedRows[protectedRows.length - 1];
-  const activeNow = current?.uv >= PROTECTION_LIMIT;
+  const actualPeriod = protectionPeriod(rows, 'uv');
+  const clearPeriod = protectionPeriod(rows, 'clear');
+  const activeActualNow = current?.uv >= PROTECTION_LIMIT;
+  const activeClearNow = current?.clear >= PROTECTION_LIMIT;
 
-  elements.sunProtectionStart.textContent = start ? formatDateTime(start.timestamp, true) : 'Ei tänään';
-  elements.sunProtectionEnd.textContent = end ? formatDateTime(end.timestamp, true) : 'Ei tänään';
+  elements.actualProtectionStart.textContent = formatClock(actualPeriod?.start);
+  elements.actualProtectionEnd.textContent = formatClock(actualPeriod?.end);
+  elements.clearProtectionStart.textContent = formatClock(clearPeriod?.start);
+  elements.clearProtectionEnd.textContent = formatClock(clearPeriod?.end);
 
-  if (!start) {
-    elements.sunProtectionBadge.textContent = 'Ei suositusjaksoa';
-    elements.sunProtectionNow.textContent = `Ei tarpeen UV-indeksin perusteella nyt (UVI ${formatUv(current?.uv)})`;
-    elements.sunProtectionMessage.textContent = 'Sääennusteen huomioiva UV-indeksi jää tänään alle rajan 3.';
-  } else if (activeNow) {
+  if (activeActualNow) {
     elements.sunProtectionBadge.textContent = 'Voimassa nyt';
     elements.sunProtectionNow.textContent = `Suojaudu nyt (UVI ${formatUv(current.uv)})`;
-    elements.sunProtectionMessage.textContent = `Suositusjakso on tänään noin klo ${formatDateTime(start.timestamp, true)}–${formatDateTime(end.timestamp, true)}. Arvio perustuu sääennusteen huomioivaan UV-indeksiin, ei pilvettömän taivaan vertailuarvoon.`;
-  } else if (new Date(current.timestamp) < new Date(start.timestamp)) {
-    elements.sunProtectionBadge.textContent = 'Alkaa myöhemmin';
-    elements.sunProtectionNow.textContent = `Ei vielä; suositus alkaa noin klo ${formatDateTime(start.timestamp, true)}`;
-    elements.sunProtectionMessage.textContent = `Tämän päivän arvioitu suositusjakso on klo ${formatDateTime(start.timestamp, true)}–${formatDateTime(end.timestamp, true)}.`;
+  } else if (activeClearNow) {
+    elements.sunProtectionBadge.textContent = 'Mahdollinen tarve';
+    elements.sunProtectionNow.textContent = `Sääennuste huomioitu UVI ${formatUv(current?.uv)}, pilvettömän taivaan UVI ${formatUv(current?.clear)}`;
   } else {
-    elements.sunProtectionBadge.textContent = 'Päättynyt tänään';
-    elements.sunProtectionNow.textContent = `Suositus ei ole enää voimassa (UVI ${formatUv(current.uv)})`;
-    elements.sunProtectionMessage.textContent = `Tämän päivän suositusjakso oli noin klo ${formatDateTime(start.timestamp, true)}–${formatDateTime(end.timestamp, true)}.`;
+    elements.sunProtectionBadge.textContent = actualPeriod || clearPeriod ? 'Ei voimassa nyt' : 'Ei suositusjaksoa';
+    elements.sunProtectionNow.textContent = `Sääennuste huomioitu UVI ${formatUv(current?.uv)} · pilvetön taivas ${formatUv(current?.clear)}`;
   }
+
+  const actualText = actualPeriod ? `${formatClock(actualPeriod.start)}–${formatClock(actualPeriod.end)}` : 'ei ylitä rajaa';
+  const clearText = clearPeriod ? `${formatClock(clearPeriod.start)}–${formatClock(clearPeriod.end)}` : 'ei ylitä rajaa';
+  elements.sunProtectionMessage.textContent = `UVI ≥ ${PROTECTION_LIMIT}: sääennuste huomioitu ${actualText}; pilvetön taivas ${clearText}. Raja-ajat on laskettu tuntipisteiden välistä lineaarisella interpoloinnilla minuutin tarkkuudella.`;
 }
 
-function renderChart() {
-  const rows = visibleRows();
+function renderChart(rows) {
   const canvas = document.querySelector('#uvChart');
   const context = canvas.getContext('2d');
   if (state.chart) state.chart.destroy();
@@ -268,14 +314,40 @@ function renderChart() {
   const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
   const border = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
 
+  const nowLinePlugin = {
+    id: 'nowLine',
+    afterDatasetsDraw(chart) {
+      const now = Date.now();
+      const firstTime = rows.length ? new Date(rows[0].timestamp).getTime() : NaN;
+      const lastTime = rows.length ? new Date(rows[rows.length - 1].timestamp).getTime() : NaN;
+      if (!Number.isFinite(firstTime) || now < firstTime || now > lastTime) return;
+      const x = chart.scales.x.getPixelForValue(now);
+      const { top, bottom } = chart.chartArea;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = '#b03a2e';
+      ctx.stroke();
+      ctx.fillStyle = '#b03a2e';
+      ctx.font = '600 12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Nyt', x, top + 14);
+      ctx.restore();
+    }
+  };
+
   state.chart = new Chart(context, {
     type: 'line',
+    plugins: [nowLinePlugin],
     data: {
-      labels: rows.map((row) => row.timestamp),
       datasets: [
         {
           label: 'Sääennuste huomioitu',
-          data: rows.map((row) => row.uv),
+          data: rows.map((row) => ({ x: new Date(row.timestamp).getTime(), y: row.uv })),
           borderColor: accent,
           backgroundColor: 'rgba(31, 111, 120, 0.08)',
           borderWidth: 2.5,
@@ -286,7 +358,7 @@ function renderChart() {
         },
         {
           label: 'Pilvetön taivas',
-          data: rows.map((row) => row.clear),
+          data: rows.map((row) => ({ x: new Date(row.timestamp).getTime(), y: row.clear })),
           borderColor: muted,
           borderWidth: 1.7,
           borderDash: [6, 5],
@@ -312,20 +384,21 @@ function renderChart() {
         tooltip: {
           callbacks: {
             title: (items) => formatDateTime(rows[items[0].dataIndex].timestamp),
-            label: (item) => `${item.dataset.label}: ${formatUv(item.raw)}`
+            label: (item) => `${item.dataset.label}: ${formatUv(item.parsed.y)}`
           }
         }
       },
       scales: {
         x: {
+          type: 'linear',
+          min: rows.length ? new Date(rows[0].timestamp).getTime() : undefined,
+          max: rows.length ? new Date(rows[rows.length - 1].timestamp).getTime() : undefined,
           grid: { display: false },
           ticks: {
             maxRotation: 0,
-            autoSkip: true,
             maxTicksLimit: window.innerWidth <= 560 ? 5 : 9,
-            callback: (_value, index) => {
-              const date = rows[index] ? new Date(rows[index].timestamp) : null;
-              if (!date) return '';
+            callback: (value) => {
+              const date = new Date(value);
               return rows.length <= 24
                 ? new Intl.DateTimeFormat('fi-FI', { hour: '2-digit' }).format(date)
                 : new Intl.DateTimeFormat('fi-FI', { weekday: 'short', hour: '2-digit' }).format(date);
@@ -343,11 +416,16 @@ function renderChart() {
   });
 }
 
-function renderTable() {
-  const rows = visibleRows();
+function renderTable(rows) {
   const fragment = document.createDocumentFragment();
+  const currentHour = new Date();
+  currentHour.setMinutes(0, 0, 0);
   for (const row of rows) {
     const tr = document.createElement('tr');
+    if (new Date(row.timestamp).getTime() === currentHour.getTime()) {
+      tr.classList.add('is-current-hour');
+      tr.setAttribute('aria-current', 'time');
+    }
     const time = document.createElement('td');
     const actual = document.createElement('td');
     const clear = document.createElement('td');
@@ -365,13 +443,14 @@ function renderTable() {
 }
 
 function renderAll() {
+  const rows = visibleRows();
   const title = state.rangeMode === 'today' ? 'UV-indeksi tänään' : `UV-indeksi seuraavat ${state.hours} h`;
   elements.forecastHeading.textContent = title;
   renderSummary();
   renderProtection();
-  renderChart();
-  renderTable();
-  elements.selectedPoint.textContent = 'Kuvaaja ja taulukko käyttävät samoja tuntiarvoja. Napauta kuvaajaa nähdäksesi molemmat UV-arvot.';
+  renderChart(rows);
+  renderTable(rows);
+  elements.selectedPoint.textContent = 'Kuvaaja ja taulukko käyttävät täsmälleen samaa tuntiaineistoa. Napauta kuvaajaa nähdäksesi molemmat UV-arvot.';
 }
 
 async function searchAddress() {

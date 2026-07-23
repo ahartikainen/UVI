@@ -111,20 +111,28 @@
         Ennusteen suojautumisajat ladataan.
       </p>
 
-      <div class="recommendation-times" aria-label="Aurinkosuojan suositusajat">
-        <div>
-          <span class="metric-label">Suositus alkaa</span>
-          <strong id="sunProtectionStart">–</strong>
+      <div class="protection-series" aria-label="Aurinkosuojan suositusajat">
+        <div class="protection-series-card">
+          <strong>Sääennuste huomioitu <code>uv_index</code></strong>
+          <div class="recommendation-times">
+            <div><span class="metric-label">Alkaa</span><strong id="actualProtectionStart">–</strong></div>
+            <div><span class="metric-label">Päättyy</span><strong id="actualProtectionEnd">–</strong></div>
+          </div>
         </div>
-        <div>
-          <span class="metric-label">Suositus päättyy</span>
-          <strong id="sunProtectionEnd">–</strong>
+        <div class="protection-series-card">
+          <strong>Pilvetön taivas <code>uv_index_clear_sky</code></strong>
+          <div class="recommendation-times">
+            <div><span class="metric-label">Alkaa</span><strong id="clearProtectionStart">–</strong></div>
+            <div><span class="metric-label">Päättyy</span><strong id="clearProtectionEnd">–</strong></div>
+          </div>
         </div>
       </div>
 
-      <p class="helper-text">
-        Suositus perustuu ennustettuun UV-indeksiin: suojaudu, kun UVI on 3 tai suurempi.
-        Kellonajat ovat tuntiennusteeseen perustuvia arvioita. Aurinkovoiteen lisäksi suojaa iho vaatetuksella ja hakeudu tarvittaessa varjoon.
+      <p class="helper-text source-note">
+        Suojaudu, kun UVI on 3 tai suurempi. Lähteet:
+        <a href="https://www.who.int/news-room/questions-and-answers/item/radiation-protecting-against-skin-cancer" target="_blank" rel="noopener noreferrer">WHO</a>
+        ja <a href="https://www.ilmatieteenlaitos.fi/uvi-ennuste" target="_blank" rel="noopener noreferrer">Ilmatieteen laitos</a>.
+        Raja-ajat interpoloidaan tuntiarvojen välistä minuutin tarkkuudelle. Aurinkovoiteen lisäksi suojaa iho vaatetuksella ja hakeudu tarvittaessa varjoon.
       </p>
     </section>
 

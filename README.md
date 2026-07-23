@@ -6,7 +6,7 @@ Kevyt, staattinen UV-indeksiennuste GitHub Pagesia varten.
 
 ## Ominaisuudet
 
-- Aurinkosuojan suositus UVI-rajan 3 perusteella sekä arvio suosituksen alkamis- ja päättymisajasta
+- Aurinkosuojan suositus UVI-rajan 3 perusteella sekä erilliset, lineaarisesti interpoloidut alkamis- ja päättymisajat arvoille `uv_index` ja `uv_index_clear_sky`
 
 - Helsingin keskusta oletussijaintina
 - sijainnin valinta kartalta
@@ -65,8 +65,10 @@ Open-Meteon ennustevastaus alkaa oletuksena kuluvan päivän klo 00:sta, joten m
 
 Sivu näyttää kaksi Open-Meteon arvoa erillään eikä laske niiden keskiarvoa:
 
-- **Sääennuste huomioitu** (`uv_index`) sisältää ennustetun pilvisyyden vaikutuksen. Tätä käytetään nykytilanteessa, päivän maksimissa ja aurinkosuojan suosituksessa.
-- **Pilvetön taivas** (`uv_index_clear_sky`) on vertailuarvo tilanteelle, jossa pilvet eivät vaimenna UV-säteilyä. Vaihtelevassa pilvisyydessä sitä voi käyttää varautumisen ylärajana.
+- **Sääennuste huomioitu** (`uv_index`) sisältää ennustetun pilvisyyden vaikutuksen.
+- **Pilvetön taivas** (`uv_index_clear_sky`) on vertailuarvo tilanteelle, jossa pilvet eivät vaimenna UV-säteilyä.
+
+Molemmille sarjoille lasketaan UVI 3:n ylitys- ja alitusajat lineaarisella interpoloinnilla minuutin tarkkuudella.
 
 Kuvaaja ja taulukko käyttävät samaa `visibleRows()`-aineistoa valitulla aikavälillä. Tänään-valinta näyttää kaikki kuluvan päivän tunnit; muut valinnat näyttävät vastaavan määrän tulevia tunteja.
 

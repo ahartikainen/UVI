@@ -43,6 +43,8 @@ const elements = {
   todayMaxTime: document.querySelector('#todayMaxTime'),
   clearSkyMax: document.querySelector('#clearSkyMax'),
   clearSkyMaxTime: document.querySelector('#clearSkyMaxTime'),
+  cloudImpact: document.querySelector('#cloudImpact'),
+  cloudImpactDetail: document.querySelector('#cloudImpactDetail'),
   interpretationText: document.querySelector('#interpretationText'),
   selectedPoint: document.querySelector('#selectedPoint'),
   tableBody: document.querySelector('#forecastTableBody'),
@@ -51,6 +53,7 @@ const elements = {
   sunProtectionBadge: document.querySelector('#sunProtectionBadge'),
   sunProtectionNow: document.querySelector('#sunProtectionNow'),
   sunProtectionMessage: document.querySelector('#sunProtectionMessage'),
+  nextProtectionChange: document.querySelector('#nextProtectionChange'),
   actualProtectionStart: document.querySelector('#actualProtectionStart'),
   actualProtectionEnd: document.querySelector('#actualProtectionEnd'),
   clearProtectionStart: document.querySelector('#clearProtectionStart'),
@@ -274,11 +277,19 @@ function renderSummary() {
   const actual = current?.uv;
   const clear = current?.clear;
   if (!Number.isFinite(actual) || !Number.isFinite(clear)) {
+    elements.cloudImpact.textContent = '–';
+    elements.cloudImpactDetail.textContent = 'Pilvien vaikutusta ei voitu laskea';
     elements.interpretationText.textContent = 'UV-arvojen tulkintaa ei voitu muodostaa.';
-  } else if (Math.abs(clear - actual) < 0.2) {
-    elements.interpretationText.textContent = 'Arvot ovat lähes samat. Pilvisyys ei ennusteen mukaan juuri vähennä UV-säteilyä, joten käytä sääennusteen huomioivaa UV-indeksiä.';
   } else {
-    elements.interpretationText.textContent = `Käytä tavallisesti sääennusteen huomioivaa arvoa ${formatUv(actual)}. Pilvettömän taivaan arvo ${formatUv(clear)} kertoo mahdollisen tason, jos pilvet väistyvät tai ennustettu pilvisyys muuttuu. Vaihtelevässä säässä suojaudu mieluummin korkeamman arvon mukaan.`;
+    const reduction = clear > 0 ? Math.max(0, Math.min(100, (1 - actual / clear) * 100)) : 0;
+    const difference = Math.max(0, clear - actual);
+    elements.cloudImpact.textContent = clear > 0 ? `−${Math.round(reduction)} %` : '0 %';
+    elements.cloudImpactDetail.textContent = `Noin ${formatUv(difference)} UVI-yksikköä pilvetöntä arvoa alempi`;
+    if (Math.abs(clear - actual) < 0.2) {
+      elements.interpretationText.textContent = 'Arvot ovat lähes samat. Pilvisyys ei ennusteen mukaan juuri vähennä UV-säteilyä, joten käytä sääennusteen huomioivaa UV-indeksiä.';
+    } else {
+      elements.interpretationText.textContent = `Käytä tavallisesti sääennusteen huomioivaa arvoa ${formatUv(actual)}. Pilvet pienentävät arvoa tällä tuntipisteellä arviolta ${Math.round(reduction)} % eli ${formatUv(difference)} UVI-yksikköä. Pilvettömän taivaan arvo ${formatUv(clear)} kertoo mahdollisen tason, jos pilvet väistyvät.`;
+    }
   }
 }
 
@@ -322,6 +333,32 @@ function formatClock(value) {
   return value ? new Intl.DateTimeFormat('fi-FI', { hour: '2-digit', minute: '2-digit' }).format(value) : 'Ei tänään';
 }
 
+function formatDuration(milliseconds) {
+  const totalMinutes = Math.max(0, Math.round(milliseconds / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours && minutes) return `${hours} h ${minutes} min`;
+  if (hours) return `${hours} h`;
+  return `${minutes} min`;
+}
+
+function nextProtectionChangeText(period, now = new Date()) {
+  if (!period) return 'Sääennusteen mukaan UVI 3 -raja ei ylity tänään.';
+  if (now < period.start) return `Suojautuminen alkaa ${formatDuration(period.start - now)} kuluttua, klo ${formatClock(period.start)}.`;
+  if (now <= period.end) return `Suojautumista suositellaan vielä ${formatDuration(period.end - now)}, klo ${formatClock(period.end)} asti.`;
+  return `Tämän päivän suojausjakso päättyi klo ${formatClock(period.end)}.`;
+}
+
+function protectionPeriods(rows, key) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const keyDate = row.timestamp.slice(0, 10);
+    if (!byDay.has(keyDate)) byDay.set(keyDate, []);
+    byDay.get(keyDate).push(row);
+  }
+  return [...byDay.values()].map((dayRows) => protectionPeriod(dayRows, key)).filter(Boolean);
+}
+
 function renderProtection() {
   const rows = todayRows();
   const current = currentStartHourRow();
@@ -334,6 +371,7 @@ function renderProtection() {
   elements.actualProtectionEnd.textContent = formatClock(actualPeriod?.end);
   elements.clearProtectionStart.textContent = formatClock(clearPeriod?.start);
   elements.clearProtectionEnd.textContent = formatClock(clearPeriod?.end);
+  elements.nextProtectionChange.textContent = nextProtectionChangeText(actualPeriod);
 
   if (activeActualNow) {
     elements.sunProtectionBadge.textContent = 'Voimassa nyt';
@@ -360,8 +398,8 @@ function renderChart(rows) {
   const accent = styles.getPropertyValue('--accent').trim();
   const muted = styles.getPropertyValue('--muted').trim();
   const border = styles.getPropertyValue('--border').trim();
-  const actualPeriod = protectionPeriod(todayRows(), 'uv');
-  const clearPeriod = protectionPeriod(todayRows(), 'clear');
+  const actualPeriods = protectionPeriods(rows, 'uv');
+  const clearPeriods = protectionPeriods(rows, 'clear');
   const currentRow = currentStartHourRow();
   const selectedTimestamp = currentRow ? new Date(currentRow.timestamp).getTime() : null;
 
@@ -379,8 +417,8 @@ function renderChart(rows) {
         ctx.fillRect(left, top, right - left, bottom - top);
         ctx.restore();
       };
-      drawBand(clearPeriod, 'rgba(102, 117, 125, 0.07)');
-      drawBand(actualPeriod, 'rgba(31, 111, 120, 0.10)');
+      clearPeriods.forEach((period) => drawBand(period, 'rgba(102, 117, 125, 0.07)'));
+      actualPeriods.forEach((period) => drawBand(period, 'rgba(31, 111, 120, 0.12)'));
     },
     afterDatasetsDraw(chart) {
       const now = Date.now();

@@ -9,7 +9,7 @@
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <header class="site-header">
@@ -83,6 +83,11 @@
         <strong id="clearSkyMax" class="metric-value">–</strong>
         <span id="clearSkyMaxTime" class="metric-detail">Vertailuarvo</span>
       </article>
+      <article class="metric-card">
+        <span class="metric-label">Pilvien vaikutus nyt</span>
+        <strong id="cloudImpact" class="metric-value">–</strong>
+        <span id="cloudImpactDetail" class="metric-detail">Lasketaan pilvettömään arvoon verrattuna</span>
+      </article>
     </section>
 
     <p id="dataTimeNote" class="data-time-note" aria-live="polite">Käytetty ennusteaika ladataan…</p>
@@ -106,6 +111,7 @@
       <div class="recommendation-current" aria-live="polite">
         <span class="metric-label">Tilanne nyt</span>
         <strong id="sunProtectionNow">Lasketaan…</strong>
+        <span id="nextProtectionChange" class="next-change">Seuraava muutos lasketaan…</span>
       </div>
 
       <p id="sunProtectionMessage" class="recommendation-message">
@@ -189,6 +195,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

@@ -83,3 +83,11 @@ Kuvaaja ja taulukko käyttävät samaa `visibleRows()`-aineistoa valitulla aikav
 ## Automaattinen ajan seuranta
 
 Sivu päivittää nykyhetken viivan, valitun aloitustunnin arvot, suojaussuosituksen ja nykyisen taulukkorivin minuutin välein. Ennustedata haetaan uudelleen tunnin vaihtuessa. Kuvaajan vaaleat tausta-alueet näyttävät UVI 3 -suojausjaksot sääennuste huomioiden ja pilvettömän taivaan vertailulle.
+
+## Version 4
+
+- Yhteenveto seuraa nykyisen alkaneen tunnin Open-Meteo-arvoa.
+- Nykyhetken viiva ja yhteenveto päivittyvät minuutin välein.
+- Kuvaaja näyttää UVI 3 -suojausjaksot hillittyinä tausta-alueina jokaiselle näkyvälle päivälle.
+- Suosituksessa näytetään seuraava muutos ja arvioitu aika siihen.
+- Yhteenvedossa näytetään pilvien arvioitu vaikutus prosentteina ja UVI-yksikköinä.

@@ -7,10 +7,9 @@
   <meta name="description" content="Tuntikohtainen UV-indeksiennuste valitulle sijainnille.">
   <title>UV-ennuste</title>
 
-  <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynh17V+R4YdG4kXImt4N+Qp0C4kM=" crossorigin="">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <header class="site-header">
@@ -155,7 +154,8 @@
       <div class="chart-wrap">
         <canvas id="uvChart" aria-label="Tuntikohtainen UV-indeksikuvaaja"></canvas>
       </div>
-      <p id="selectedPoint" class="selected-point" aria-live="polite">Klikkaa tai napauta kuvaajaa nähdäksesi tarkan arvon.</p>
+      <p id="selectedPoint" class="selected-point" aria-live="polite">Nykyistä aloitustuntia vastaava piste valitaan automaattisesti.</p>
+      <p class="helper-text chart-legend-note"><span class="protection-swatch actual"></span> Suojaussuositus sääennuste huomioiden <span class="protection-swatch clear"></span> pilvettömän taivaan mahdollinen suojausjakso.</p>
     </section>
 
     <section class="panel table-panel" aria-labelledby="tableHeading">
@@ -187,8 +187,8 @@
     </div>
   </footer>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

@@ -16,6 +16,8 @@ const state = {
   map: null,
   overviewMap: null,
   mapResizeObserver: null,
+  clockTimer: null,
+  lastForecastHour: null,
   lastSearchAt: 0,
   searchCache: new Map()
 };
@@ -91,68 +93,77 @@ function formatDateTime(isoString, compact = false) {
   ).format(date);
 }
 
-const FINLAND_BOUNDS = L.latLngBounds([59.5, 19.0], [70.2, 32.0]);
-
-function refreshMapSizes({ refitOverview = false } = {}) {
-  if (state.map) {
-    state.map.invalidateSize({ pan: false, animate: false });
-  }
-
-  if (state.overviewMap) {
-    state.overviewMap.invalidateSize({ pan: false, animate: false });
-    if (refitOverview) {
-      state.overviewMap.fitBounds(FINLAND_BOUNDS, { padding: [4, 4], animate: false });
+const FINLAND_BOUNDS = [[19.0, 59.5], [32.0, 70.2]];
+const MAP_STYLE = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '&copy; OpenStreetMap-tekijät'
     }
-  }
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+};
+
+function createLocationMarker(size = 18) {
+  const markerElement = document.createElement('div');
+  markerElement.className = 'map-location-marker';
+  markerElement.style.width = `${size}px`;
+  markerElement.style.height = `${size}px`;
+  markerElement.setAttribute('aria-label', 'Valittu sijainti');
+  return markerElement;
+}
+
+function refreshMapSizes() {
+  state.map?.resize();
+  state.overviewMap?.resize();
 }
 
 function scheduleMapRefresh(refitOverview = false) {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => refreshMapSizes({ refitOverview }));
-  });
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    refreshMapSizes();
+    if (refitOverview && state.overviewMap) {
+      state.overviewMap.fitBounds(FINLAND_BOUNDS, { padding: 18, duration: 0 });
+    }
+  }));
 }
 
 function initMaps() {
-  state.map = L.map('map', { zoomControl: true }).setView([state.latitude, state.longitude], 11);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap-tekijät'
-  }).addTo(state.map);
-  state.marker = L.circleMarker([state.latitude, state.longitude], {
-    radius: 9,
-    weight: 3,
-    color: '#17555c',
-    fillColor: '#ffffff',
-    fillOpacity: 1
-  }).addTo(state.map).bindTooltip('Valittu sijainti');
-  state.map.on('click', ({ latlng }) => chooseLocation(latlng.lat, latlng.lng, 'Kartalta valittu sijainti', false));
-
-  state.overviewMap = L.map('finlandMap', {
-    zoomControl: false,
-    attributionControl: false,
-    dragging: false,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    boxZoom: false,
-    keyboard: false,
-    tap: false
+  state.map = new maplibregl.Map({
+    container: 'map',
+    style: MAP_STYLE,
+    center: [state.longitude, state.latitude],
+    zoom: 10.5,
+    attributionControl: true
   });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 8 }).addTo(state.overviewMap);
-  state.overviewMarker = L.circleMarker([state.latitude, state.longitude], {
-    radius: 7,
-    weight: 3,
-    color: '#17555c',
-    fillColor: '#ffffff',
-    fillOpacity: 1
-  }).addTo(state.overviewMap);
+  state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  state.marker = new maplibregl.Marker({ element: createLocationMarker(20), anchor: 'center' })
+    .setLngLat([state.longitude, state.latitude])
+    .addTo(state.map);
+  state.map.on('click', ({ lngLat }) => chooseLocation(lngLat.lat, lngLat.lng, 'Kartalta valittu sijainti', false));
 
-  scheduleMapRefresh(true);
+  state.overviewMap = new maplibregl.Map({
+    container: 'finlandMap',
+    style: MAP_STYLE,
+    center: [25.5, 64.8],
+    zoom: 3.2,
+    interactive: false,
+    attributionControl: false
+  });
+  state.overviewMarker = new maplibregl.Marker({ element: createLocationMarker(16), anchor: 'center' })
+    .setLngLat([state.longitude, state.latitude])
+    .addTo(state.overviewMap);
+
+  state.map.on('load', () => scheduleMapRefresh(false));
+  state.overviewMap.on('load', () => scheduleMapRefresh(true));
   window.addEventListener('load', () => scheduleMapRefresh(true), { once: true });
   window.addEventListener('resize', () => scheduleMapRefresh(true));
   window.addEventListener('orientationchange', () => scheduleMapRefresh(true));
 
   if ('ResizeObserver' in window) {
-    state.mapResizeObserver = new ResizeObserver(() => scheduleMapRefresh(true));
+    state.mapResizeObserver = new ResizeObserver(() => scheduleMapRefresh(false));
     state.mapResizeObserver.observe(document.querySelector('#map'));
     state.mapResizeObserver.observe(document.querySelector('#finlandMap'));
   }
@@ -180,9 +191,9 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
   state.latitude = latitude;
   state.longitude = longitude;
   state.locationName = name;
-  state.marker.setLatLng([latitude, longitude]).bindTooltip(`Valittu sijainti: ${name}`);
-  state.overviewMarker.setLatLng([latitude, longitude]).bindTooltip(`Valittu sijainti: ${name}`);
-  if (centerMap) state.map.setView([latitude, longitude], 12);
+  state.marker.setLngLat([longitude, latitude]);
+  state.overviewMarker.setLngLat([longitude, latitude]);
+  if (centerMap) state.map.easeTo({ center: [longitude, latitude], zoom: 11.5, duration: 500 });
 
   const coordinateText = `${formatCoordinate(latitude, 'N', 'S')}, ${formatCoordinate(longitude, 'E', 'W')}`;
   elements.locationName.textContent = name;
@@ -195,7 +206,7 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
   try {
     state.forecast = await fetchForecast(latitude, longitude);
     renderAll();
-    scheduleMapRefresh(true);
+    scheduleMapRefresh(false);
     setStatus('Ennuste päivitetty', 'ready');
   } catch (error) {
     setStatus('Haku epäonnistui', 'error');
@@ -226,10 +237,13 @@ function visibleRows() {
   return state.rangeMode === 'today' ? todayRows() : upcomingRows().slice(0, state.hours);
 }
 
-function nearestCurrentRow() {
-  const now = Date.now();
+function currentStartHourRow() {
+  const startHour = new Date();
+  startHour.setMinutes(0, 0, 0);
+  const exact = allRows().find((row) => new Date(row.timestamp).getTime() === startHour.getTime());
+  if (exact) return exact;
   return allRows().reduce((best, row) => {
-    const distance = Math.abs(new Date(row.timestamp).getTime() - now);
+    const distance = Math.abs(new Date(row.timestamp).getTime() - startHour.getTime());
     return !best || distance < best.distance ? { row, distance } : best;
   }, null)?.row;
 }
@@ -239,7 +253,7 @@ function maxBy(rows, key) {
 }
 
 function renderSummary() {
-  const current = nearestCurrentRow();
+  const current = currentStartHourRow();
   const today = todayRows();
   const actualMax = maxBy(today, 'uv');
   const clearMax = maxBy(today, 'clear');
@@ -251,7 +265,7 @@ function renderSummary() {
   elements.currentClearUv.textContent = formatUv(current?.clear);
   elements.currentClearUvTime.textContent = currentClock;
   elements.currentClearDetail.textContent = current ? 'Pilvetön vertailuarvo' : 'Ei tietoa';
-  elements.dataTimeNote.textContent = current ? `Yhteenvedossa käytetty Open-Meteon tuntiarvo: ${formatDateTime(current.timestamp)}. Arvo valitaan nykyhetkeä lähimmästä tuntipisteestä.` : 'Käytettyä ennusteaikaa ei ole saatavilla.';
+  elements.dataTimeNote.textContent = current ? `Yhteenvedossa käytetty Open-Meteon tuntiarvo: ${formatDateTime(current.timestamp)}. Arvo valitaan nykyisen alkaneen tunnin tuntipisteestä.` : 'Käytettyä ennusteaikaa ei ole saatavilla.';
   elements.todayMax.textContent = formatUv(actualMax?.uv);
   elements.todayMaxTime.textContent = actualMax ? `Sääennuste huomioitu · ${formatDateTime(actualMax.timestamp, true)}` : 'Ei tietoa';
   elements.clearSkyMax.textContent = formatUv(clearMax?.clear);
@@ -310,7 +324,7 @@ function formatClock(value) {
 
 function renderProtection() {
   const rows = todayRows();
-  const current = nearestCurrentRow();
+  const current = currentStartHourRow();
   const actualPeriod = protectionPeriod(rows, 'uv');
   const clearPeriod = protectionPeriod(rows, 'clear');
   const activeActualNow = current?.uv >= PROTECTION_LIMIT;
@@ -342,12 +356,32 @@ function renderChart(rows) {
   const context = canvas.getContext('2d');
   if (state.chart) state.chart.destroy();
 
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
-  const border = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+  const styles = getComputedStyle(document.documentElement);
+  const accent = styles.getPropertyValue('--accent').trim();
+  const muted = styles.getPropertyValue('--muted').trim();
+  const border = styles.getPropertyValue('--border').trim();
+  const actualPeriod = protectionPeriod(todayRows(), 'uv');
+  const clearPeriod = protectionPeriod(todayRows(), 'clear');
+  const currentRow = currentStartHourRow();
+  const selectedTimestamp = currentRow ? new Date(currentRow.timestamp).getTime() : null;
 
-  const nowLinePlugin = {
-    id: 'nowLine',
+  const guidePlugin = {
+    id: 'timeAndProtectionGuides',
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
+      const drawBand = (period, fillStyle) => {
+        if (!period) return;
+        const left = Math.max(x.left, x.getPixelForValue(period.start.getTime()));
+        const right = Math.min(x.right, x.getPixelForValue(period.end.getTime()));
+        if (right <= left) return;
+        ctx.save();
+        ctx.fillStyle = fillStyle;
+        ctx.fillRect(left, top, right - left, bottom - top);
+        ctx.restore();
+      };
+      drawBand(clearPeriod, 'rgba(102, 117, 125, 0.07)');
+      drawBand(actualPeriod, 'rgba(31, 111, 120, 0.10)');
+    },
     afterDatasetsDraw(chart) {
       const now = Date.now();
       const firstTime = rows.length ? new Date(rows[0].timestamp).getTime() : NaN;
@@ -374,16 +408,19 @@ function renderChart(rows) {
 
   state.chart = new Chart(context, {
     type: 'line',
-    plugins: [nowLinePlugin],
+    plugins: [guidePlugin],
     data: {
       datasets: [
         {
           label: 'Sääennuste huomioitu',
           data: rows.map((row) => ({ x: new Date(row.timestamp).getTime(), y: row.uv })),
           borderColor: accent,
-          backgroundColor: 'rgba(31, 111, 120, 0.08)',
+          backgroundColor: accent,
           borderWidth: 2.5,
-          pointRadius: rows.length <= 24 ? 2.5 : 0,
+          pointRadius: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 6 : (rows.length <= 24 ? 2.5 : 0)),
+          pointBackgroundColor: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? '#b03a2e' : accent),
+          pointBorderWidth: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 2 : 0),
+          pointBorderColor: '#ffffff',
           pointHoverRadius: 6,
           tension: 0.22,
           fill: false
@@ -392,9 +429,13 @@ function renderChart(rows) {
           label: 'Pilvetön taivas',
           data: rows.map((row) => ({ x: new Date(row.timestamp).getTime(), y: row.clear })),
           borderColor: muted,
+          backgroundColor: muted,
           borderWidth: 1.7,
           borderDash: [6, 5],
-          pointRadius: rows.length <= 24 ? 2 : 0,
+          pointRadius: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 5 : (rows.length <= 24 ? 2 : 0)),
+          pointBackgroundColor: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? '#b03a2e' : muted),
+          pointBorderWidth: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 2 : 0),
+          pointBorderColor: '#ffffff',
           pointHoverRadius: 5,
           tension: 0.22,
           fill: false
@@ -404,12 +445,12 @@ function renderChart(rows) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 250 },
+      animation: { duration: 200 },
       interaction: { mode: 'index', intersect: false },
       onClick: (_event, active) => {
         if (!active.length) return;
         const row = rows[active[0].index];
-        elements.selectedPoint.textContent = `${formatDateTime(row.timestamp)} · sääennuste huomioitu ${formatUv(row.uv)} (${uvLevel(row.uv)}) · pilvetön taivas ${formatUv(row.clear)}`;
+        elements.selectedPoint.textContent = `Valittu ${formatDateTime(row.timestamp)} · sääennuste huomioitu ${formatUv(row.uv)} (${uvLevel(row.uv)}) · pilvetön taivas ${formatUv(row.clear)}`;
       },
       plugins: {
         legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 14 } },
@@ -482,7 +523,10 @@ function renderAll() {
   renderProtection();
   renderChart(rows);
   renderTable(rows);
-  elements.selectedPoint.textContent = 'Kuvaaja ja taulukko käyttävät täsmälleen samaa tuntiaineistoa. Napauta kuvaajaa nähdäksesi molemmat UV-arvot.';
+  const selected = currentStartHourRow();
+  elements.selectedPoint.textContent = selected
+    ? `Valittu nyt: ${formatDateTime(selected.timestamp)} · sääennuste huomioitu ${formatUv(selected.uv)} (${uvLevel(selected.uv)}) · pilvetön taivas ${formatUv(selected.clear)}`
+    : 'Nykyisen tunnin tietoa ei ole saatavilla.';
 }
 
 async function searchAddress() {
@@ -553,6 +597,26 @@ function useGps() {
   );
 }
 
+function startTimeFollower() {
+  if (state.clockTimer) clearInterval(state.clockTimer);
+  state.lastForecastHour = dateKey(new Date()) + new Intl.DateTimeFormat('fi-FI', { hour: '2-digit', hour12: false }).format(new Date());
+  state.clockTimer = setInterval(async () => {
+    if (!state.forecast) return;
+    const now = new Date();
+    const hourKey = `${dateKey(now)}-${now.getHours()}`;
+    const needsFreshForecast = state.lastForecastHour !== hourKey;
+    state.lastForecastHour = hourKey;
+    if (needsFreshForecast) {
+      try {
+        state.forecast = await fetchForecast(state.latitude, state.longitude);
+      } catch (_error) {
+        // Säilytä viimeisin onnistunut ennuste, jos tuntipäivitys epäonnistuu.
+      }
+    }
+    renderAll();
+  }, 60 * 1000);
+}
+
 function bindEvents() {
   elements.searchButton.addEventListener('click', searchAddress);
   elements.addressInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') searchAddress(); });
@@ -570,6 +634,7 @@ function bindEvents() {
 async function init() {
   initMaps();
   bindEvents();
+  startTimeFollower();
   await chooseLocation(HELSINKI.latitude, HELSINKI.longitude, HELSINKI.name, false);
 }
 

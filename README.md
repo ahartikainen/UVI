@@ -74,7 +74,12 @@ Kuvaaja ja taulukko käyttävät samaa `visibleRows()`-aineistoa valitulla aikav
 
 ## Mobiilikorjaukset
 
-- Karttakuvien yleinen `max-width`-ristiriita on estetty Leaflet-kartassa.
+- Karttakuvien yleinen `max-width`-ristiriita on estetty MapLibre-kartassa.
 - Kartat käyttävät pienempää korkeutta puhelimella ja niiden koko päivitetään selainikkunan muuttuessa.
 - Taulukko muuttuu puhelimella korteiksi, jotta vaakavieritystä ei tarvita.
 - Kuvaajan selite, akselit ja aikavälipainikkeet mukautuvat kapeaan näyttöön.
+
+
+## Automaattinen ajan seuranta
+
+Sivu päivittää nykyhetken viivan, valitun aloitustunnin arvot, suojaussuosituksen ja nykyisen taulukkorivin minuutin välein. Ennustedata haetaan uudelleen tunnin vaihtuessa. Kuvaajan vaaleat tausta-alueet näyttävät UVI 3 -suojausjaksot sääennuste huomioiden ja pilvettömän taivaan vertailulle.

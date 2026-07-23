@@ -32,8 +32,11 @@ const elements = {
   usedLocationCoordinates: document.querySelector('#usedLocationCoordinates'),
   currentUv: document.querySelector('#currentUv'),
   currentUvLevel: document.querySelector('#currentUvLevel'),
+  currentUvTime: document.querySelector('#currentUvTime'),
   currentClearUv: document.querySelector('#currentClearUv'),
   currentClearDetail: document.querySelector('#currentClearDetail'),
+  currentClearUvTime: document.querySelector('#currentClearUvTime'),
+  dataTimeNote: document.querySelector('#dataTimeNote'),
   todayMax: document.querySelector('#todayMax'),
   todayMaxTime: document.querySelector('#todayMaxTime'),
   clearSkyMax: document.querySelector('#clearSkyMax'),
@@ -98,7 +101,7 @@ function refreshMapSizes({ refitOverview = false } = {}) {
   if (state.overviewMap) {
     state.overviewMap.invalidateSize({ pan: false, animate: false });
     if (refitOverview) {
-      state.overviewMap.fitBounds(FINLAND_BOUNDS, { padding: [8, 8], animate: false });
+      state.overviewMap.fitBounds(FINLAND_BOUNDS, { padding: [4, 4], animate: false });
     }
   }
 }
@@ -110,7 +113,7 @@ function scheduleMapRefresh(refitOverview = false) {
 }
 
 function initMaps() {
-  state.map = L.map('map', { zoomControl: true }).setView([state.latitude, state.longitude], 12);
+  state.map = L.map('map', { zoomControl: true }).setView([state.latitude, state.longitude], 11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap-tekijät'
@@ -179,7 +182,7 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
   state.locationName = name;
   state.marker.setLatLng([latitude, longitude]).bindTooltip(`Valittu sijainti: ${name}`);
   state.overviewMarker.setLatLng([latitude, longitude]).bindTooltip(`Valittu sijainti: ${name}`);
-  if (centerMap) state.map.setView([latitude, longitude], 13);
+  if (centerMap) state.map.setView([latitude, longitude], 12);
 
   const coordinateText = `${formatCoordinate(latitude, 'N', 'S')}, ${formatCoordinate(longitude, 'E', 'W')}`;
   elements.locationName.textContent = name;
@@ -241,10 +244,14 @@ function renderSummary() {
   const actualMax = maxBy(today, 'uv');
   const clearMax = maxBy(today, 'clear');
 
+  const currentClock = current ? `klo ${formatDateTime(current.timestamp, true)}` : '';
   elements.currentUv.textContent = formatUv(current?.uv);
-  elements.currentUvLevel.textContent = current ? `${uvLevel(current.uv)} · sääennuste huomioitu · ${formatDateTime(current.timestamp, true)}` : 'Ei tietoa';
+  elements.currentUvTime.textContent = currentClock;
+  elements.currentUvLevel.textContent = current ? `${uvLevel(current.uv)} · sääennuste huomioitu` : 'Ei tietoa';
   elements.currentClearUv.textContent = formatUv(current?.clear);
-  elements.currentClearDetail.textContent = current ? `Pilvetön vertailuarvo · ${formatDateTime(current.timestamp, true)}` : 'Ei tietoa';
+  elements.currentClearUvTime.textContent = currentClock;
+  elements.currentClearDetail.textContent = current ? 'Pilvetön vertailuarvo' : 'Ei tietoa';
+  elements.dataTimeNote.textContent = current ? `Yhteenvedossa käytetty Open-Meteon tuntiarvo: ${formatDateTime(current.timestamp)}. Arvo valitaan nykyhetkeä lähimmästä tuntipisteestä.` : 'Käytettyä ennusteaikaa ei ole saatavilla.';
   elements.todayMax.textContent = formatUv(actualMax?.uv);
   elements.todayMaxTime.textContent = actualMax ? `Sääennuste huomioitu · ${formatDateTime(actualMax.timestamp, true)}` : 'Ei tietoa';
   elements.clearSkyMax.textContent = formatUv(clearMax?.clear);

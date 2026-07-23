@@ -66,12 +66,12 @@
       </article>
       <article class="metric-card">
         <span class="metric-label">Nyt · sääennuste huomioitu</span>
-        <strong id="currentUv" class="metric-value">–</strong>
+        <div class="metric-value-row"><strong id="currentUv" class="metric-value">–</strong><span id="currentUvTime" class="metric-time">–</span></div>
         <span id="currentUvLevel" class="metric-detail">UV-indeksi</span>
       </article>
       <article class="metric-card">
         <span class="metric-label">Nyt · pilvetön taivas</span>
-        <strong id="currentClearUv" class="metric-value">–</strong>
+        <div class="metric-value-row"><strong id="currentClearUv" class="metric-value">–</strong><span id="currentClearUvTime" class="metric-time">–</span></div>
         <span id="currentClearDetail" class="metric-detail">Vertailuarvo</span>
       </article>
       <article class="metric-card">
@@ -85,6 +85,8 @@
         <span id="clearSkyMaxTime" class="metric-detail">Vertailuarvo</span>
       </article>
     </section>
+
+    <p id="dataTimeNote" class="data-time-note" aria-live="polite">Käytetty ennusteaika ladataan…</p>
 
     <section class="panel interpretation-panel" aria-labelledby="interpretationHeading">
       <p class="eyebrow">Arvojen tulkinta</p>

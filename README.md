@@ -91,3 +91,20 @@ Sivu päivittää nykyhetken viivan, valitun aloitustunnin arvot, suojaussuositu
 - Kuvaaja näyttää UVI 3 -suojausjaksot hillittyinä tausta-alueina jokaiselle näkyvälle päivälle.
 - Suosituksessa näytetään seuraava muutos ja arvioitu aika siihen.
 - Yhteenvedossa näytetään pilvien arvioitu vaikutus prosentteina ja UVI-yksikköinä.
+
+## Versio 5
+
+- Aikavyöhykkeen oletus määräytyy valittujen koordinaattien perusteella (`timezone=auto`).
+- Käyttäjä voi vaihtaa näytön laitteen aikavyöhykkeeseen, UTC-aikaan tai antaa muun IANA-aikavyöhykkeen, kuten `Europe/London`.
+- Open-Meteon tuntiajat pyydetään Unix-aikaleimoina, ja kaikki yhteenveto-, suojaus-, taulukko- ja kuvaaja-ajat muotoillaan valitussa aikavyöhykkeessä.
+- Kuvaajan x-akselille piirretään pystysuora ruudukkolinja jokaiselle tasatunnille.
+- Kellonaikalabelit näytetään harvemmin: lyhyessä näkymässä 2–3 tunnin välein ja pidemmissä näkymissä väljemmin. Vuorokauden vaihtuessa näytetään päivämäärä.
+- Molemmissa UV-sarjoissa näkyy datapiste jokaiselle tuntiarvolle; pitkissä näkymissä pisteet ovat pienempiä.
+
+
+## Versio 6
+
+- Otsikko muutettu kuvaavammaksi: **UV-indeksi ja aurinkosuojan ennuste**.
+- Sivulle lisätty näkyvä huomautus siitä, ettei kyse ole virallisesta viranomais- tai terveydenhuollon työkalusta.
+- Lisätty Open-Meteon UV-muuttujien, säämallipohjaisuuden ja ennusteluonteen kuvaus sekä linkit dokumentaatioon, datalähteisiin ja lisenssiin.
+- Kuvaajan pilvettömän taivaan sarja käyttää nyt hillittyä okranruskeaa väriä, kun sääennuste huomioiva sarja säilyy turkoosina. Myös legendan viiva/piste ja suojausalueen selite vastaavat uusia värejä.

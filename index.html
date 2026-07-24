@@ -4,25 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Tuntikohtainen UV-indeksiennuste valitulle sijainnille.">
-  <title>UV-ennuste</title>
+  <meta name="description" content="Tuntikohtainen UV-indeksiennuste, pilvettömän taivaan vertailu ja aurinkosuojan suositus valitulle sijainnille.">
+  <title>UV-indeksi ja aurinkosuojan ennuste</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <header class="site-header">
     <div class="shell header-inner">
       <div>
-        <p class="eyebrow">Paikallinen sääpalvelu</p>
-        <h1>UV-ennuste</h1>
+        <p class="eyebrow">UV-indeksi sijainnin mukaan</p>
+        <h1>UV-indeksi ja aurinkosuojan ennuste</h1>
       </div>
       <div id="statusBadge" class="status-badge" aria-live="polite">Ladataan…</div>
     </div>
   </header>
 
   <main class="shell main-grid">
+    <aside class="notice-panel" aria-label="Palvelun käyttöä koskeva huomautus">
+      <strong>Huomio: tämä ei ole virallinen viranomais- tai terveydenhuollon työkalu.</strong>
+      <span>Ennuste on suuntaa antava ja perustuu säämallien laskennallisiin arvoihin. Noudata tarvittaessa viranomaisten ja terveydenhuollon ohjeita.</span>
+    </aside>
     <section class="panel controls-panel" aria-labelledby="locationHeading">
       <div class="section-heading">
         <div>
@@ -42,6 +46,33 @@
       </div>
 
       <div id="searchResults" class="search-results" aria-live="polite"></div>
+
+      <div class="timezone-controls" aria-labelledby="timezoneHeading">
+        <div>
+          <p class="field-label" id="timezoneHeading">Näytettävä aikavyöhyke</p>
+          <p class="helper-text">Oletuksena käytetään valittujen koordinaattien paikallista aikaa.</p>
+        </div>
+        <div class="timezone-control-row">
+          <select id="timezoneMode" aria-label="Valitse aikavyöhykkeen tapa">
+            <option value="location">Sijainnin paikallinen aika (oletus)</option>
+            <option value="device">Laitteen aikavyöhyke</option>
+            <option value="utc">UTC</option>
+            <option value="custom">Muu aikavyöhyke…</option>
+          </select>
+          <input id="customTimezone" class="is-hidden" type="text" list="timezoneSuggestions" placeholder="Esim. Europe/London" aria-label="IANA-aikavyöhyke">
+          <button id="applyTimezone" class="button button-secondary" type="button">Käytä aikavyöhykettä</button>
+        </div>
+        <datalist id="timezoneSuggestions">
+          <option value="Europe/Helsinki"></option>
+          <option value="Europe/Stockholm"></option>
+          <option value="Europe/London"></option>
+          <option value="America/New_York"></option>
+          <option value="America/Los_Angeles"></option>
+          <option value="Asia/Tokyo"></option>
+          <option value="Australia/Sydney"></option>
+        </datalist>
+        <p id="timezoneStatus" class="helper-text" aria-live="polite">Käytössä: sijainnin paikallinen aika.</p>
+      </div>
 
       <div id="map" role="application" aria-label="Kartta sijainnin valintaa varten"></div>
       <p class="helper-text">Klikkaa karttaa vaihtaaksesi ennusteen sijaintia.</p>
@@ -184,17 +215,29 @@
         </table>
       </div>
     </section>
+
+    <section class="panel data-source-panel" aria-labelledby="dataSourceHeading">
+      <p class="eyebrow">Tietolähde</p>
+      <h2 id="dataSourceHeading">Mistä UV-indeksitiedot tulevat?</h2>
+      <p>Sivu hakee tuntikohtaiset arvot Open-Meteon Weather Forecast API -rajapinnasta. Kuvaajan <code>uv_index</code> sisältää sääennusteen, erityisesti pilvisyyden, vaikutuksen. <code>uv_index_clear_sky</code> kuvaa laskennallista UV-indeksiä pilvettömän taivaan tilanteessa.</p>
+      <p>Open-Meteo yhdistää useiden kansallisten sääpalvelujen numeerisia säämalleja ja valitsee sijainnille soveltuvan korkean resoluution mallin. Kyse on ennusteesta, ei paikalla tehdystä UV-mittauksesta.</p>
+      <div class="source-links" aria-label="Open-Meteon tietolähdelinkit">
+        <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener noreferrer">Weather Forecast API ja muuttujat</a>
+        <a href="https://open-meteo.com/en/docs#data-sources" target="_blank" rel="noopener noreferrer">Säämallit ja datalähteet</a>
+        <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">Datan lisenssi ja lähdeviittaus</a>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
     <div class="shell footer-inner">
-      <span>Säädata: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></span>
+      <span>UV-ennustedata: <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener noreferrer">Open-Meteo Weather Forecast API</a></span>
       <span>Kartta ja osoitteet: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>-tekijät</span>
     </div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

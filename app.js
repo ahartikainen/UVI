@@ -19,7 +19,10 @@ const state = {
   clockTimer: null,
   lastForecastHour: null,
   lastSearchAt: 0,
-  searchCache: new Map()
+  searchCache: new Map(),
+  timezoneMode: 'location',
+  customTimezone: '',
+  displayTimezone: 'Europe/Helsinki'
 };
 
 const elements = {
@@ -58,7 +61,11 @@ const elements = {
   actualProtectionEnd: document.querySelector('#actualProtectionEnd'),
   clearProtectionStart: document.querySelector('#clearProtectionStart'),
   clearProtectionEnd: document.querySelector('#clearProtectionEnd'),
-  rangeButtons: [...document.querySelectorAll('.range-button')]
+  rangeButtons: [...document.querySelectorAll('.range-button')],
+  timezoneMode: document.querySelector('#timezoneMode'),
+  customTimezone: document.querySelector('#customTimezone'),
+  applyTimezone: document.querySelector('#applyTimezone'),
+  timezoneStatus: document.querySelector('#timezoneStatus')
 };
 
 function setStatus(message, type = 'loading') {
@@ -84,16 +91,47 @@ function uvLevel(value) {
   return 'Äärimmäinen';
 }
 
-function dateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function activeTimezone() {
+  return state.displayTimezone || 'UTC';
 }
 
-function formatDateTime(isoString, compact = false) {
-  const date = new Date(isoString);
+function dateKey(timestamp = Date.now(), timezone = activeTimezone()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function formatDateTime(timestamp, compact = false) {
   return new Intl.DateTimeFormat('fi-FI', compact
-    ? { hour: '2-digit', minute: '2-digit' }
-    : { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }
-  ).format(date);
+    ? { timeZone: activeTimezone(), hour: '2-digit', minute: '2-digit' }
+    : { timeZone: activeTimezone(), weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }
+  ).format(new Date(timestamp));
+}
+
+function requestedTimezone() {
+  if (state.timezoneMode === 'device') return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (state.timezoneMode === 'utc') return 'UTC';
+  if (state.timezoneMode === 'custom') return state.customTimezone.trim();
+  return 'auto';
+}
+
+function isValidTimezone(timezone) {
+  try {
+    new Intl.DateTimeFormat('fi-FI', { timeZone: timezone }).format();
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function timezoneDescription() {
+  const zone = activeTimezone();
+  if (state.timezoneMode === 'location') return `sijainnin paikallinen aika (${zone})`;
+  if (state.timezoneMode === 'device') return `laitteen aikavyöhyke (${zone})`;
+  if (state.timezoneMode === 'utc') return 'UTC';
+  return `valittu aikavyöhyke (${zone})`;
 }
 
 const FINLAND_BOUNDS = [[19.0, 59.5], [32.0, 70.2]];
@@ -179,7 +217,8 @@ async function fetchForecast(latitude, longitude) {
     hourly: 'uv_index,uv_index_clear_sky',
     forecast_days: '7',
     past_days: '1',
-    timezone: 'auto'
+    timezone: requestedTimezone(),
+    timeformat: 'unixtime'
   });
   const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if (!response.ok) throw new Error(`Sääpalvelu vastasi virheellä ${response.status}.`);
@@ -208,6 +247,8 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
   setStatus('Haetaan ennustetta…');
   try {
     state.forecast = await fetchForecast(latitude, longitude);
+    state.displayTimezone = state.forecast.timezone || (requestedTimezone() === 'auto' ? 'UTC' : requestedTimezone());
+    elements.timezoneStatus.textContent = `Käytössä: ${timezoneDescription()}.`;
     renderAll();
     scheduleMapRefresh(false);
     setStatus('Ennuste päivitetty', 'ready');
@@ -220,7 +261,7 @@ async function chooseLocation(latitude, longitude, name, centerMap = true) {
 function allRows() {
   const hourly = state.forecast.hourly;
   return hourly.time.map((timestamp, index) => ({
-    timestamp,
+    timestamp: Number(timestamp) * 1000,
     uv: Number(hourly.uv_index[index]),
     clear: Number(hourly.uv_index_clear_sky[index])
   }));
@@ -228,12 +269,12 @@ function allRows() {
 
 function todayRows() {
   const key = dateKey();
-  return allRows().filter((row) => row.timestamp.startsWith(key));
+  return allRows().filter((row) => dateKey(row.timestamp) === key);
 }
 
 function upcomingRows() {
   const cutoff = Date.now() - 30 * 60 * 1000;
-  return allRows().filter((row) => new Date(row.timestamp).getTime() >= cutoff);
+  return allRows().filter((row) => row.timestamp >= cutoff);
 }
 
 function visibleRows() {
@@ -241,14 +282,14 @@ function visibleRows() {
 }
 
 function currentStartHourRow() {
-  const startHour = new Date();
-  startHour.setMinutes(0, 0, 0);
-  const exact = allRows().find((row) => new Date(row.timestamp).getTime() === startHour.getTime());
-  if (exact) return exact;
-  return allRows().reduce((best, row) => {
-    const distance = Math.abs(new Date(row.timestamp).getTime() - startHour.getTime());
-    return !best || distance < best.distance ? { row, distance } : best;
-  }, null)?.row;
+  const now = Date.now();
+  const rows = allRows();
+  let current = rows[0] || null;
+  for (const row of rows) {
+    if (row.timestamp > now) break;
+    current = row;
+  }
+  return current;
 }
 
 function maxBy(rows, key) {
@@ -268,7 +309,7 @@ function renderSummary() {
   elements.currentClearUv.textContent = formatUv(current?.clear);
   elements.currentClearUvTime.textContent = currentClock;
   elements.currentClearDetail.textContent = current ? 'Pilvetön vertailuarvo' : 'Ei tietoa';
-  elements.dataTimeNote.textContent = current ? `Yhteenvedossa käytetty Open-Meteon tuntiarvo: ${formatDateTime(current.timestamp)}. Arvo valitaan nykyisen alkaneen tunnin tuntipisteestä.` : 'Käytettyä ennusteaikaa ei ole saatavilla.';
+  elements.dataTimeNote.textContent = current ? `Yhteenvedossa käytetty Open-Meteon tuntiarvo: ${formatDateTime(current.timestamp)}. Aikavyöhyke: ${timezoneDescription()}. Arvo valitaan nykyisen alkaneen tunnin tuntipisteestä.` : 'Käytettyä ennusteaikaa ei ole saatavilla.';
   elements.todayMax.textContent = formatUv(actualMax?.uv);
   elements.todayMaxTime.textContent = actualMax ? `Sääennuste huomioitu · ${formatDateTime(actualMax.timestamp, true)}` : 'Ei tietoa';
   elements.clearSkyMax.textContent = formatUv(clearMax?.clear);
@@ -299,8 +340,8 @@ function interpolateThresholdTime(first, second, key) {
   if (!Number.isFinite(value1) || !Number.isFinite(value2) || value1 === value2) return null;
   const fraction = (PROTECTION_LIMIT - value1) / (value2 - value1);
   if (fraction < 0 || fraction > 1) return null;
-  const time1 = new Date(first.timestamp).getTime();
-  const time2 = new Date(second.timestamp).getTime();
+  const time1 = first.timestamp;
+  const time2 = second.timestamp;
   const interpolated = time1 + fraction * (time2 - time1);
   return new Date(Math.round(interpolated / 60000) * 60000);
 }
@@ -330,7 +371,7 @@ function protectionPeriod(rows, key) {
 }
 
 function formatClock(value) {
-  return value ? new Intl.DateTimeFormat('fi-FI', { hour: '2-digit', minute: '2-digit' }).format(value) : 'Ei tänään';
+  return value ? new Intl.DateTimeFormat('fi-FI', { timeZone: activeTimezone(), hour: '2-digit', minute: '2-digit' }).format(value) : 'Ei tänään';
 }
 
 function formatDuration(milliseconds) {
@@ -352,7 +393,7 @@ function nextProtectionChangeText(period, now = new Date()) {
 function protectionPeriods(rows, key) {
   const byDay = new Map();
   for (const row of rows) {
-    const keyDate = row.timestamp.slice(0, 10);
+    const keyDate = dateKey(row.timestamp);
     if (!byDay.has(keyDate)) byDay.set(keyDate, []);
     byDay.get(keyDate).push(row);
   }
@@ -389,6 +430,32 @@ function renderProtection() {
   elements.sunProtectionMessage.textContent = `UVI ≥ ${PROTECTION_LIMIT}: sääennuste huomioitu ${actualText}; pilvetön taivas ${clearText}. Raja-ajat on laskettu tuntipisteiden välistä lineaarisella interpoloinnilla minuutin tarkkuudella.`;
 }
 
+function xTickIntervalHours(rowCount) {
+  const mobile = window.innerWidth <= 560;
+  if (rowCount <= 24) return mobile ? 3 : 2;
+  if (rowCount <= 72) return mobile ? 12 : 6;
+  return mobile ? 24 : 12;
+}
+
+function localHour(timestamp) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: activeTimezone(), hour: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(timestamp));
+  return Number(parts.find((part) => part.type === 'hour')?.value || 0);
+}
+
+function formatXAxisTick(timestamp, rowCount) {
+  const hour = localHour(timestamp);
+  if (rowCount > 24 && hour === 0) {
+    return new Intl.DateTimeFormat('fi-FI', {
+      timeZone: activeTimezone(), weekday: 'short', day: 'numeric', month: 'numeric'
+    }).format(new Date(timestamp));
+  }
+  return new Intl.DateTimeFormat('fi-FI', {
+    timeZone: activeTimezone(), hour: '2-digit', minute: '2-digit'
+  }).format(new Date(timestamp));
+}
+
 function renderChart(rows) {
   const canvas = document.querySelector('#uvChart');
   const context = canvas.getContext('2d');
@@ -397,11 +464,12 @@ function renderChart(rows) {
   const styles = getComputedStyle(document.documentElement);
   const accent = styles.getPropertyValue('--accent').trim();
   const muted = styles.getPropertyValue('--muted').trim();
+  const clearSkyColor = styles.getPropertyValue('--clear-sky').trim() || '#a26824';
   const border = styles.getPropertyValue('--border').trim();
   const actualPeriods = protectionPeriods(rows, 'uv');
   const clearPeriods = protectionPeriods(rows, 'clear');
   const currentRow = currentStartHourRow();
-  const selectedTimestamp = currentRow ? new Date(currentRow.timestamp).getTime() : null;
+  const selectedTimestamp = currentRow ? currentRow.timestamp : null;
 
   const guidePlugin = {
     id: 'timeAndProtectionGuides',
@@ -417,13 +485,13 @@ function renderChart(rows) {
         ctx.fillRect(left, top, right - left, bottom - top);
         ctx.restore();
       };
-      clearPeriods.forEach((period) => drawBand(period, 'rgba(102, 117, 125, 0.07)'));
+      clearPeriods.forEach((period) => drawBand(period, 'rgba(162, 104, 36, 0.08)'));
       actualPeriods.forEach((period) => drawBand(period, 'rgba(31, 111, 120, 0.12)'));
     },
     afterDatasetsDraw(chart) {
       const now = Date.now();
-      const firstTime = rows.length ? new Date(rows[0].timestamp).getTime() : NaN;
-      const lastTime = rows.length ? new Date(rows[rows.length - 1].timestamp).getTime() : NaN;
+      const firstTime = rows.length ? rows[0].timestamp : NaN;
+      const lastTime = rows.length ? rows[rows.length - 1].timestamp : NaN;
       if (!Number.isFinite(firstTime) || now < firstTime || now > lastTime) return;
       const x = chart.scales.x.getPixelForValue(now);
       const { top, bottom } = chart.chartArea;
@@ -451,13 +519,13 @@ function renderChart(rows) {
       datasets: [
         {
           label: 'Sääennuste huomioitu',
-          data: rows.map((row) => ({ x: new Date(row.timestamp).getTime(), y: row.uv })),
+          data: rows.map((row) => ({ x: row.timestamp, y: row.uv })),
           borderColor: accent,
           backgroundColor: accent,
           borderWidth: 2.5,
-          pointRadius: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 6 : (rows.length <= 24 ? 2.5 : 0)),
-          pointBackgroundColor: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? '#b03a2e' : accent),
-          pointBorderWidth: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 2 : 0),
+          pointRadius: rows.map((row) => row.timestamp === selectedTimestamp ? 6 : (rows.length <= 72 ? 2.2 : 1.2)),
+          pointBackgroundColor: rows.map((row) => row.timestamp === selectedTimestamp ? '#b03a2e' : accent),
+          pointBorderWidth: rows.map((row) => row.timestamp === selectedTimestamp ? 2 : 0),
           pointBorderColor: '#ffffff',
           pointHoverRadius: 6,
           tension: 0.22,
@@ -465,14 +533,14 @@ function renderChart(rows) {
         },
         {
           label: 'Pilvetön taivas',
-          data: rows.map((row) => ({ x: new Date(row.timestamp).getTime(), y: row.clear })),
-          borderColor: muted,
-          backgroundColor: muted,
+          data: rows.map((row) => ({ x: row.timestamp, y: row.clear })),
+          borderColor: clearSkyColor,
+          backgroundColor: clearSkyColor,
           borderWidth: 1.7,
           borderDash: [6, 5],
-          pointRadius: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 5 : (rows.length <= 24 ? 2 : 0)),
-          pointBackgroundColor: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? '#b03a2e' : muted),
-          pointBorderWidth: rows.map((row) => new Date(row.timestamp).getTime() === selectedTimestamp ? 2 : 0),
+          pointRadius: rows.map((row) => row.timestamp === selectedTimestamp ? 5 : (rows.length <= 72 ? 1.8 : 1)),
+          pointBackgroundColor: rows.map((row) => row.timestamp === selectedTimestamp ? '#b03a2e' : clearSkyColor),
+          pointBorderWidth: rows.map((row) => row.timestamp === selectedTimestamp ? 2 : 0),
           pointBorderColor: '#ffffff',
           pointHoverRadius: 5,
           tension: 0.22,
@@ -502,17 +570,33 @@ function renderChart(rows) {
       scales: {
         x: {
           type: 'linear',
-          min: rows.length ? new Date(rows[0].timestamp).getTime() : undefined,
-          max: rows.length ? new Date(rows[rows.length - 1].timestamp).getTime() : undefined,
-          grid: { display: false },
+          min: rows.length ? rows[0].timestamp : undefined,
+          max: rows.length ? rows[rows.length - 1].timestamp : undefined,
+          grid: {
+            display: true,
+            drawTicks: true,
+            color: (context) => {
+              const first = rows[0]?.timestamp || 0;
+              const hourIndex = Math.round((Number(context.tick?.value) - first) / 3600000);
+              return hourIndex % 6 === 0 ? 'rgba(102, 117, 125, 0.22)' : 'rgba(102, 117, 125, 0.10)';
+            },
+            lineWidth: (context) => {
+              const first = rows[0]?.timestamp || 0;
+              const hourIndex = Math.round((Number(context.tick?.value) - first) / 3600000);
+              return hourIndex % 6 === 0 ? 1 : 0.7;
+            }
+          },
           ticks: {
+            stepSize: 60 * 60 * 1000,
+            autoSkip: false,
             maxRotation: 0,
-            maxTicksLimit: window.innerWidth <= 560 ? 5 : 9,
+            minRotation: 0,
             callback: (value) => {
-              const date = new Date(value);
-              return rows.length <= 24
-                ? new Intl.DateTimeFormat('fi-FI', { hour: '2-digit' }).format(date)
-                : new Intl.DateTimeFormat('fi-FI', { weekday: 'short', hour: '2-digit' }).format(date);
+              const first = rows[0]?.timestamp || Number(value);
+              const hourIndex = Math.round((Number(value) - first) / 3600000);
+              const interval = xTickIntervalHours(rows.length);
+              if (hourIndex % interval !== 0 && !(rows.length > 24 && localHour(Number(value)) === 0)) return '';
+              return formatXAxisTick(Number(value), rows.length);
             }
           }
         },
@@ -529,11 +613,10 @@ function renderChart(rows) {
 
 function renderTable(rows) {
   const fragment = document.createDocumentFragment();
-  const currentHour = new Date();
-  currentHour.setMinutes(0, 0, 0);
+  const currentHour = currentStartHourRow()?.timestamp;
   for (const row of rows) {
     const tr = document.createElement('tr');
-    if (new Date(row.timestamp).getTime() === currentHour.getTime()) {
+    if (row.timestamp === currentHour) {
       tr.classList.add('is-current-hour');
       tr.setAttribute('aria-current', 'time');
     }
@@ -637,11 +720,11 @@ function useGps() {
 
 function startTimeFollower() {
   if (state.clockTimer) clearInterval(state.clockTimer);
-  state.lastForecastHour = dateKey(new Date()) + new Intl.DateTimeFormat('fi-FI', { hour: '2-digit', hour12: false }).format(new Date());
+  state.lastForecastHour = `${dateKey()}-${formatDateTime(Date.now(), true).slice(0, 2)}`;
   state.clockTimer = setInterval(async () => {
     if (!state.forecast) return;
     const now = new Date();
-    const hourKey = `${dateKey(now)}-${now.getHours()}`;
+    const hourKey = `${dateKey(now.getTime())}-${formatDateTime(now.getTime(), true).slice(0, 2)}`;
     const needsFreshForecast = state.lastForecastHour !== hourKey;
     state.lastForecastHour = hourKey;
     if (needsFreshForecast) {
@@ -659,6 +742,23 @@ function bindEvents() {
   elements.searchButton.addEventListener('click', searchAddress);
   elements.addressInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') searchAddress(); });
   elements.gpsButton.addEventListener('click', useGps);
+  elements.timezoneMode.addEventListener('change', () => {
+    elements.customTimezone.classList.toggle('is-hidden', elements.timezoneMode.value !== 'custom');
+    if (elements.timezoneMode.value === 'custom') elements.customTimezone.focus();
+  });
+  elements.applyTimezone.addEventListener('click', async () => {
+    state.timezoneMode = elements.timezoneMode.value;
+    state.customTimezone = elements.customTimezone.value;
+    const zone = requestedTimezone();
+    if (state.timezoneMode === 'custom' && !isValidTimezone(zone)) {
+      elements.timezoneStatus.textContent = 'Aikavyöhykettä ei tunnistettu. Käytä IANA-muotoa, esimerkiksi Europe/London.';
+      return;
+    }
+    await chooseLocation(state.latitude, state.longitude, state.locationName, false);
+  });
+  elements.customTimezone.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') elements.applyTimezone.click();
+  });
   for (const button of elements.rangeButtons) {
     button.addEventListener('click', () => {
       state.rangeMode = button.dataset.mode;
